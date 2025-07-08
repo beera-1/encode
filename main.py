@@ -10,10 +10,7 @@ from handlers.screenshots import generate_screenshots
 from handlers.sample_gen import generate_sample
 from utils.gofile import upload_to_gofile
 
-# Bot Client
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# User session Client for large file uploads
 user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION)
 
 user_video_paths = {}
@@ -63,7 +60,7 @@ async def callback_handler(client, callback):
     elif data.startswith("tg|"):
         path = data.split("|", 1)[1]
         filename = os.path.basename(path)
-        caption = f"✅ Encoded by Survivor\n🎞️ `{filename}`"
+        caption = f"✅ Encoded by Survivor Zone\n🎞️ `{filename}`"
 
         try:
             if os.path.getsize(path) < 50 * 1024 * 1024:
@@ -110,7 +107,6 @@ async def callback_handler(client, callback):
 if __name__ == "__main__":
     print("✅ Bot started (Polling mode)")
 
-    # TCP Health for Koyeb
     def keep_port_8080_open():
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(('0.0.0.0', 8080))
