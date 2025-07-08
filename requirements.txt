@@ -3,4 +3,5 @@ tgcrypto
 flask==3.0.2
 gunicorn==21.2.0
 requests
-moviepy==1.0.3
+moviepy
+imageio-ffmpeg  # this may be needed for moviepy to get duration
