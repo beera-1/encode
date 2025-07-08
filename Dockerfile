@@ -1,13 +1,9 @@
-# 📁 Dockerfile
-
-FROM python:3.10-slim
-
-RUN apt-get update && apt-get install -y ffmpeg curl && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+FROM python:3.11-slim
 
 WORKDIR /app
+
 COPY . .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8080
-CMD ["gunicorn", "main:app", "-b", "0.0.0.0:8080"]
+CMD ["python", "main.py"]
