@@ -27,8 +27,7 @@ async def encode_to_x265(input_path, message=None):
         stdout=asyncio.subprocess.DEVNULL
     )
 
-    progress_msg = None
-    last_percent = -1
+    last_progress_step = -1
 
     while True:
         line = await process.stderr.readline()
@@ -41,11 +40,15 @@ async def encode_to_x265(input_path, message=None):
             hours, minutes, seconds, ms = map(int, match.groups())
             current_sec = hours * 3600 + minutes * 60 + seconds + ms / 100
             percent = (current_sec / total_duration) * 100
-            if percent - last_percent >= 5 or percent >= 99:
+
+            progress_step = int(percent // 5)  # update every 5%
+            if progress_step != last_progress_step:
+                last_progress_step = progress_step
                 bar = build_progress_bar(percent)
+                text = f"🎬 Encoding Progress: {bar}"
                 try:
-                    await message.edit_text(f"🎬 Encoding Progress: {bar}")
-                    last_percent = percent
+                    if message.text != text:
+                        await message.edit_text(text)
                 except:
                     pass
 
