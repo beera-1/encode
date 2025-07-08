@@ -1,78 +1,57 @@
-import asyncio
 import os
+import asyncio
+import shlex
 import re
+import math
+from moviepy.editor import VideoFileClip
+
+def get_duration(input_path):
+    clip = VideoFileClip(input_path)
+    return clip.duration  # in seconds
+
+def build_progress_bar(percent, length=20):
+    filled = math.floor(length * percent / 100)
+    bar = '█' * filled + ' ' * (length - filled)
+    return f"[{bar}] {percent:.0f}%"
 
 async def encode_to_x265(input_path, message=None):
     filename = os.path.basename(input_path)
-    name, ext = os.path.splitext(filename)
-    output_path = f"{name}_x265{ext}"
+    output_path = f"x265_{filename}"
+    total_duration = get_duration(input_path)
 
-    # Step 1: Get duration using ffprobe
-    duration = await get_duration(input_path)
-    if not duration:
-        raise Exception("❌ Unable to fetch duration.")
+    cmd = f"ffmpeg -i {shlex.quote(input_path)} -c:v libx265 -crf 28 -c:a copy {shlex.quote(output_path)} -y"
 
-    # Step 2: Build ffmpeg command
-    cmd = [
-        "ffmpeg", "-i", input_path,
-        "-c:v", "libx265", "-preset", "medium",
-        "-crf", "28", "-c:a", "copy",
-        "-y", output_path
-    ]
-
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE
+    process = await asyncio.create_subprocess_shell(
+        cmd,
+        stderr=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL
     )
 
-    time_pattern = re.compile(r"time=(\d+):(\d+):(\d+\.\d+)")
+    progress_msg = None
     last_percent = -1
 
-    # Step 3: Read ffmpeg stderr line by line
     while True:
         line = await process.stderr.readline()
         if not line:
             break
-        decoded = line.decode("utf-8", errors="ignore")
-        match = time_pattern.search(decoded)
+
+        decoded_line = line.decode("utf-8", errors="ignore")
+        match = re.search(r"time=(\d+):(\d+):(\d+).(\d+)", decoded_line)
         if match:
-            h, m, s = map(float, match.groups())
-            current = h * 3600 + m * 60 + s
-            percent = int((current / duration) * 100)
-            if percent != last_percent:
-                last_percent = percent
+            hours, minutes, seconds, ms = map(int, match.groups())
+            current_sec = hours * 3600 + minutes * 60 + seconds + ms / 100
+            percent = (current_sec / total_duration) * 100
+            if percent - last_percent >= 5 or percent >= 99:
                 bar = build_progress_bar(percent)
-                if message:
-                    try:
-                        await message.edit(f"🎬 Encoding:\n{bar} {percent}%")
-                    except:
-                        pass  # Ignore Telegram rate limits
+                try:
+                    await message.edit_text(f"🎬 Encoding Progress: {bar}")
+                    last_percent = percent
+                except:
+                    pass
 
     await process.wait()
+
+    if not os.path.exists(output_path):
+        raise Exception("❌ Encoding failed. Output not found.")
+
     return output_path
-
-# Step 4: ffprobe to get total video duration
-async def get_duration(input_path):
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-select_streams", "v:0",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        input_path
-    ]
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL
-    )
-    stdout, _ = await process.communicate()
-    try:
-        return float(stdout.decode().strip())
-    except:
-        return None
-
-# Step 5: Build progress bar with filled blocks
-def build_progress_bar(percent, length=20):
-    filled = int(length * percent / 100)
-    return "[" + "█" * filled + "░" * (length - filled) + "]"
