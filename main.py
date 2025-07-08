@@ -1,37 +1,22 @@
 import os
-from flask import Flask, request
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from config import API_ID, API_HASH, BOT_TOKEN, WEBHOOK_URL
+from config import API_ID, API_HASH, BOT_TOKEN
 from handlers.encoder import encode_to_x265
 from handlers.screenshots import generate_screenshots
 from handlers.sample_gen import generate_sample
 from utils.gofile import upload_to_gofile
 
-# Flask + Pyrogram
-app = Flask(__name__)
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-# Store user's video paths
 user_video_paths = {}
 
-# Flask webhook endpoint
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def webhook():
-    update = request.get_json()
-    if update:
-        bot.process_new_updates([update])
-    return "OK"
-
-# Handle incoming videos/documents
 @bot.on_message(filters.private & (filters.video | filters.document))
 async def handle_video(client, message):
     video = message.video or message.document
-
     if not video.file_name.lower().endswith((".mp4", ".mkv", ".avi", ".mov")):
-        return await message.reply("❗ Unsupported format. Please send .mp4, .mkv, .avi, or .mov")
+        return await message.reply("❗ Unsupported format. Only .mp4, .mkv, .avi, .mov allowed.")
 
-    status = await message.reply("📥 Downloading your file...")
+    status = await message.reply("📥 Downloading file...")
     input_path = await message.download()
     user_video_paths[message.from_user.id] = input_path
 
@@ -44,20 +29,16 @@ async def handle_video(client, message):
         [InlineKeyboardButton("🎞️ Sample 120s", callback_data="sample120"),
          InlineKeyboardButton("🎞️ Sample 150s", callback_data="sample150")]
     ])
+    await status.edit("✅ Downloaded! Choose action:", reply_markup=buttons)
 
-    await status.edit("✅ File downloaded! Choose an action:", reply_markup=buttons)
-
-# Callback query handler for buttons
 @bot.on_callback_query()
 async def callback_handler(client, callback):
     user_id = callback.from_user.id
     input_path = user_video_paths.get(user_id)
-
     if not input_path:
-        return await callback.answer("❗ No video found for you.", show_alert=True)
+        return await callback.answer("❗ No video found.", show_alert=True)
 
     data = callback.data
-
     if data == "convert":
         await callback.message.edit("🎬 Encoding to x265...")
         try:
@@ -69,12 +50,12 @@ async def callback_handler(client, callback):
             [InlineKeyboardButton("📤 Upload to Telegram", callback_data=f"tg|{output_path}")],
             [InlineKeyboardButton("🌐 Upload to Gofile", callback_data=f"gofile|{output_path}")]
         ])
-        await callback.message.edit("✅ Encoding complete. Choose upload method:", reply_markup=buttons)
+        await callback.message.edit("✅ Done! Choose upload method:", reply_markup=buttons)
 
     elif data.startswith("tg|"):
         path = data.split("|", 1)[1]
         filename = os.path.basename(path)
-        caption = f"✅ Encoded to x265 (HEVC)\n👨‍💻 Encoded by Survivor\n🎞️ `{filename}`"
+        caption = f"✅ Encoded by Survivor\n🎞️ `{filename}`"
         await callback.message.reply_video(video=path, caption=caption)
 
     elif data.startswith("gofile|"):
@@ -82,35 +63,33 @@ async def callback_handler(client, callback):
         await callback.message.edit("🌐 Uploading to Gofile...")
         link = upload_to_gofile(path)
         if link:
-            await callback.message.edit(f"✅ Uploaded to Gofile:\n🔗 {link}")
+            await callback.message.edit(f"✅ Uploaded:\n🔗 {link}")
         else:
-            await callback.message.edit("❌ Upload to Gofile failed.")
+            await callback.message.edit("❌ Gofile upload failed.")
 
     elif data.startswith("screenshot"):
         count = int(data.replace("screenshot", ""))
-        await callback.message.edit(f"📸 Generating {count} screenshots...")
+        await callback.message.edit(f"📸 Creating {count} screenshots...")
         try:
             shots = await generate_screenshots(input_path, count)
             for shot in shots:
                 await callback.message.reply_photo(photo=shot)
                 os.remove(shot)
         except:
-            await callback.message.edit("❌ Screenshot generation failed.")
+            await callback.message.edit("❌ Screenshot error.")
 
     elif data.startswith("sample"):
         duration = int(data.replace("sample", ""))
-        await callback.message.edit(f"🎞️ Generating sample clip of {duration}s...")
+        await callback.message.edit(f"🎞️ Creating sample ({duration}s)...")
         try:
-            sample_path = await generate_sample(input_path, duration)
-            await callback.message.reply_video(video=sample_path, caption=f"🎞️ Sample {duration}s clip")
-            os.remove(sample_path)
+            sample = await generate_sample(input_path, duration)
+            await callback.message.reply_video(video=sample, caption=f"🎞️ {duration}s sample")
+            os.remove(sample)
         except:
-            await callback.message.edit("❌ Sample creation failed.")
+            await callback.message.edit("❌ Sample error.")
 
     await callback.answer()
 
-# Start Flask + Pyrogram
 if __name__ == "__main__":
-    bot.start()
-    bot.set_webhook(WEBHOOK_URL + f"/{BOT_TOKEN}")
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    print("✅ Bot started (Polling mode)")
+    bot.run()
