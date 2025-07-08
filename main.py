@@ -3,24 +3,19 @@ import socket
 import threading
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from config import API_ID, API_HASH, BOT_TOKEN
+from pyrogram.enums import ChatAction
+from config import API_ID, API_HASH, BOT_TOKEN, STRING_SESSION
 from handlers.encoder import encode_to_x265
 from handlers.screenshots import generate_screenshots
 from handlers.sample_gen import generate_sample
 from utils.gofile import upload_to_gofile
 
-# ✅ Start TCP port 8080 immediately
-def keep_port_8080_open():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('0.0.0.0', 8080))
-    sock.listen(1)
-    while True:
-        conn, _ = sock.accept()
-        conn.close()
-
-threading.Thread(target=keep_port_8080_open, daemon=True).start()
-
+# Bot Client
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# User session Client for large file uploads
+user = Client("user", api_id=API_ID, api_hash=API_HASH, session_string=STRING_SESSION)
+
 user_video_paths = {}
 
 @bot.on_message(filters.private & (filters.video | filters.document))
@@ -69,7 +64,16 @@ async def callback_handler(client, callback):
         path = data.split("|", 1)[1]
         filename = os.path.basename(path)
         caption = f"✅ Encoded by Survivor\n🎞️ `{filename}`"
-        await callback.message.reply_video(video=path, caption=caption)
+
+        try:
+            if os.path.getsize(path) < 50 * 1024 * 1024:
+                await callback.message.reply_video(video=path, caption=caption)
+            else:
+                await callback.message.edit("⚠️ Large file! Uploading via user session...")
+                await user.send_chat_action(callback.message.chat.id, ChatAction.UPLOAD_VIDEO)
+                await user.send_video(callback.message.chat.id, video=path, caption=caption)
+        except Exception as e:
+            await callback.message.reply(f"❌ Upload failed: {e}")
 
     elif data.startswith("gofile|"):
         path = data.split("|", 1)[1]
@@ -105,4 +109,17 @@ async def callback_handler(client, callback):
 
 if __name__ == "__main__":
     print("✅ Bot started (Polling mode)")
+
+    # TCP Health for Koyeb
+    def keep_port_8080_open():
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('0.0.0.0', 8080))
+        sock.listen(1)
+        while True:
+            conn, _ = sock.accept()
+            conn.close()
+
+    threading.Thread(target=keep_port_8080_open, daemon=True).start()
+
+    user.start()
     bot.run()
