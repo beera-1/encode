@@ -75,8 +75,8 @@ async def callback_handler(client, callback):
             for shot in shots:
                 await callback.message.reply_photo(photo=shot)
                 os.remove(shot)
-        except:
-            await callback.message.edit("❌ Screenshot error.")
+        except Exception as e:
+            await callback.message.edit(f"❌ Screenshot error.\n{e}")
 
     elif data.startswith("sample"):
         duration = int(data.replace("sample", ""))
@@ -85,11 +85,25 @@ async def callback_handler(client, callback):
             sample = await generate_sample(input_path, duration)
             await callback.message.reply_video(video=sample, caption=f"🎞️ {duration}s sample")
             os.remove(sample)
-        except:
-            await callback.message.edit("❌ Sample error.")
+        except Exception as e:
+            await callback.message.edit(f"❌ Sample error.\n{e}")
 
     await callback.answer()
 
 if __name__ == "__main__":
     print("✅ Bot started (Polling mode)")
     bot.run()
+
+# 🟢 Keep Koyeb TCP port 8080 alive
+import socket
+import threading
+
+def keep_port_8080_open():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0', 8080))
+    sock.listen(1)
+    while True:
+        conn, _ = sock.accept()
+        conn.close()
+
+threading.Thread(target=keep_port_8080_open, daemon=True).start()
