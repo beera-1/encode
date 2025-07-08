@@ -1,4 +1,6 @@
 import os
+import socket
+import threading
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import API_ID, API_HASH, BOT_TOKEN
@@ -40,9 +42,9 @@ async def callback_handler(client, callback):
 
     data = callback.data
     if data == "convert":
-        await callback.message.edit("🎬 Encoding to x265...")
+        msg = await callback.message.edit("⏳ Encoding started...")
         try:
-            output_path = await encode_to_x265(input_path)
+            output_path = await encode_to_x265(input_path, message=msg)
         except Exception as e:
             return await callback.message.edit(f"❌ Encoding failed: {e}")
 
@@ -94,16 +96,13 @@ if __name__ == "__main__":
     print("✅ Bot started (Polling mode)")
     bot.run()
 
-# 🟢 Keep Koyeb TCP port 8080 alive
-import socket
-import threading
+    # 🟢 Keep Koyeb TCP port 8080 alive
+    def keep_port_8080_open():
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('0.0.0.0', 8080))
+        sock.listen(1)
+        while True:
+            conn, _ = sock.accept()
+            conn.close()
 
-def keep_port_8080_open():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('0.0.0.0', 8080))
-    sock.listen(1)
-    while True:
-        conn, _ = sock.accept()
-        conn.close()
-
-threading.Thread(target=keep_port_8080_open, daemon=True).start()
+    threading.Thread(target=keep_port_8080_open, daemon=True).start()
