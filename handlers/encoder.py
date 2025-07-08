@@ -5,14 +5,19 @@ import re
 import math
 from moviepy.editor import VideoFileClip
 
+
 def get_duration(input_path):
     clip = VideoFileClip(input_path)
-    return clip.duration  # in seconds
+    duration = clip.duration
+    clip.close()  # important to release file
+    return duration  # in seconds
+
 
 def build_progress_bar(percent, length=20):
     filled = math.floor(length * percent / 100)
     bar = '█' * filled + ' ' * (length - filled)
     return f"[{bar}] {percent:.0f}%"
+
 
 async def encode_to_x265(input_path, message=None):
     filename = os.path.basename(input_path)
@@ -47,9 +52,9 @@ async def encode_to_x265(input_path, message=None):
                 bar = build_progress_bar(percent)
                 text = f"🎬 Encoding Progress: {bar}"
                 try:
-                    if message.text != text:
+                    if message and message.text != text:
                         await message.edit_text(text)
-                except:
+                except Exception:
                     pass
 
     await process.wait()
