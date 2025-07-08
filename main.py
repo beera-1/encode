@@ -9,6 +9,17 @@ from handlers.screenshots import generate_screenshots
 from handlers.sample_gen import generate_sample
 from utils.gofile import upload_to_gofile
 
+# ✅ Start TCP port 8080 immediately
+def keep_port_8080_open():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(('0.0.0.0', 8080))
+    sock.listen(1)
+    while True:
+        conn, _ = sock.accept()
+        conn.close()
+
+threading.Thread(target=keep_port_8080_open, daemon=True).start()
+
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_video_paths = {}
 
@@ -95,14 +106,3 @@ async def callback_handler(client, callback):
 if __name__ == "__main__":
     print("✅ Bot started (Polling mode)")
     bot.run()
-
-    # 🟢 Keep Koyeb TCP port 8080 alive
-    def keep_port_8080_open():
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.bind(('0.0.0.0', 8080))
-        sock.listen(1)
-        while True:
-            conn, _ = sock.accept()
-            conn.close()
-
-    threading.Thread(target=keep_port_8080_open, daemon=True).start()
